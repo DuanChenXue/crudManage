@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>员工管理后台</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ① 页头 -->
+<header class="page-header">
+  <h1>员工管理</h1>
+  <span class="subtitle">单页后台 · CRUD 主链路</span>
+</header>
+
+<main class="container">
+
+  <!-- ② 操作栏 -->
+  <section class="toolbar">
+    <button type="button" class="btn btn-primary" id="btnAdd">+ 新增员工</button>
+    <div class="filters">
+      <input type="search" id="qKeyword" class="input" placeholder="搜索 姓名/工号/手机号" autocomplete="off">
+      <select id="qDepartment" class="input">
+        <option value="">全部部门</option>
+      </select>
+      <select id="qStatus" class="input">
+        <option value="">全部状态</option>
+        <option value="1">在职</option>
+        <option value="0">离职</option>
+      </select>
+      <button type="button" class="btn" id="btnReset">重置</button>
+    </div>
+  </section>
+
+  <!-- ③ 数据表格 -->
+  <section class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>工号</th><th>姓名</th><th>性别</th><th>部门</th><th>职位</th>
+          <th>手机号</th><th>入职日期</th><th>状态</th><th class="col-ops">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div class="empty" id="empty" hidden>
+      <p class="empty-title">未找到匹配的员工</p>
+      <p class="empty-hint">试试清空筛选条件，或新增一名员工</p>
+    </div>
+
+    <div class="loading" id="loading" hidden>加载中…</div>
+  </section>
+
+  <!-- ④ 分页区 -->
+  <footer class="pager" id="pager" hidden>
+    <span class="pager-total">共 <b id="totalCount">0</b> 条</span>
+    <div class="pager-nav">
+      <button type="button" class="btn btn-sm" id="btnPrev">‹ 上一页</button>
+      <span class="pager-pages" id="pagerPages"></span>
+      <button type="button" class="btn btn-sm" id="btnNext">下一页 ›</button>
+    </div>
+  </footer>
+
+</main>
+
+<!-- D-1 员工表单弹层（新增/编辑复用，DOM 只有一份） -->
+<div class="mask" id="formMask" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+    <div class="modal-head">
+      <h2 id="formTitle">新增员工</h2>
+      <button type="button" class="modal-close" id="formClose" aria-label="关闭">×</button>
+    </div>
+
+    <form class="modal-body form" id="empForm" novalidate>
+      <input type="hidden" id="fmId">
+
+      <div class="field">
+        <label>工号</label>
+        <div class="readonly" id="fmEmpNo">保存后自动生成</div>
+      </div>
+
+      <div class="field">
+        <label for="fmName">姓名 <i class="req">*</i></label>
+        <input type="text" id="fmName" class="input" maxlength="30" placeholder="请输入姓名">
+        <p class="err" data-for="name"></p>
+      </div>
+
+      <div class="field">
+        <label for="fmGender">性别 <i class="req">*</i></label>
+        <select id="fmGender" class="input">
+          <option value="保密">保密</option>
+          <option value="男">男</option>
+          <option value="女">女</option>
+        </select>
+        <p class="err" data-for="gender"></p>
+      </div>
+
+      <div class="field">
+        <label for="fmPhone">手机号 <i class="req">*</i></label>
+        <input type="text" id="fmPhone" class="input" maxlength="11" placeholder="11 位手机号">
+        <p class="err" data-for="phone"></p>
+      </div>
+
+      <div class="field">
+        <label for="fmEmail">邮箱</label>
+        <input type="text" id="fmEmail" class="input" placeholder="选填">
+        <p class="err" data-for="email"></p>
+      </div>
+
+      <div class="field">
+        <label for="fmDepartment">部门 <i class="req">*</i></label>
+        <select id="fmDepartment" class="input"></select>
+        <p class="err" data-for="department"></p>
+      </div>
+
+      <div class="field">
+        <label for="fmPosition">职位 <i class="req">*</i></label>
+        <input type="text" id="fmPosition" class="input" maxlength="30" placeholder="请输入职位">
+        <p class="err" data-for="position"></p>
+      </div>
+
+      <div class="field">
+        <label for="fmHireDate">入职日期 <i class="req">*</i></label>
+        <input type="date" id="fmHireDate" class="input">
+        <p class="err" data-for="hire_date"></p>
+      </div>
+
+      <div class="field">
+        <label for="fmStatus">状态</label>
+        <select id="fmStatus" class="input">
+          <option value="1">在职</option>
+          <option value="0">离职</option>
+        </select>
+        <p class="err" data-for="status"></p>
+      </div>
+
+      <div class="field field-full">
+        <label for="fmNote">备注</label>
+        <textarea id="fmNote" class="input" rows="2" maxlength="200" placeholder="选填，200 字以内"></textarea>
+        <p class="err" data-for="note"></p>
+      </div>
+
+      <p class="form-alert" id="formAlert" hidden></p>
+    </form>
+
+    <div class="modal-foot">
+      <button type="button" class="btn" id="formCancel">取消</button>
+      <button type="button" class="btn btn-primary" id="formSubmit">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- D-2 删除确认弹层 -->
+<div class="mask" id="delMask" hidden>
+  <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+    <div class="modal-head">
+      <h2 id="delTitle">删除确认</h2>
+      <button type="button" class="modal-close" id="delClose" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="delText" class="del-text"></p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="delCancel">取消</button>
+      <button type="button" class="btn btn-danger" id="delConfirm">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- D-3 全局提示 Toast -->
+<div class="toast-box" id="toastBox"></div>
+
+<!-- 本地引入（非 CDN）：不引入 Bootstrap 等三方 UI 组件库，样式与浮层均为自绘 -->
+<script src="/vendor/jquery-3.7.1.min.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

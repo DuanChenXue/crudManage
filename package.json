@@ -1,0 +1,14 @@
+{
+  "name": "staff-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "员工管理后台 · 单页 CRUD（Node 内置模块，零依赖）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --no-warnings test/frontend-smoke.js && node --no-warnings test/acceptance.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
