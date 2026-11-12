@@ -66,9 +66,9 @@ crudManage/
 | --- | --- | --- |
 | GET | `/api/employees?keyword=&department=&status=&page=1&pageSize=10` | 列表 + 检索 + 分页 |
 | GET | `/api/employees/:id` | 单条详情（编辑回填） |
-| POST | `/api/employees` | 新增（工号后端生成） |
+| POST | `/api/addEmployee` | 新增（工号后端生成） |
 | PUT | `/api/employees/:id` | 编辑（离职记录 400 拒绝） |
-| DELETE | `/api/employees/:id` | 删除 |
+| DELETE | `/api/delete/:id` | 删除 |
 | GET | `/api/health` | 健康检查 |
 
 状态码：200 成功 / 400 校验失败或业务拒绝 / 404 记录不存在 / 409 唯一键冲突 / 500 服务端异常。

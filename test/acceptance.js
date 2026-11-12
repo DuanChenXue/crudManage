@@ -116,6 +116,8 @@ const emp = (over = {}) => ({
   }
 
   const A = API();
+  const ADD = `${BASE}/api/addEmployee`;
+  const DEL = `${BASE}/api/delete`;
 
   /* ---------- R-2 工号自动生成 ---------- */
   console.log('【R-2 新增 · 工号自动生成】');
@@ -124,45 +126,45 @@ const emp = (over = {}) => ({
     list0.status === 200 && list0.code === 0 && list0.data.total === 0,
     `status=${list0.status} total=${list0.data?.total}`);
 
-  const c1 = await call('POST', A, emp());
+  const c1 = await call('POST', ADD, emp());
   check('空库首条工号为 EMP0001', c1.data?.emp_no === 'EMP0001', c1.data?.emp_no);
   check('新增默认状态为在职(1)', c1.data?.status === 1, String(c1.data?.status));
   check('id / created_at / updated_at 由后端生成',
     Number.isInteger(c1.data?.id) && !!c1.data?.created_at && !!c1.data?.updated_at);
 
   for (let i = 2; i <= 9; i++) {
-    await call('POST', A, emp({ name: `员工${i}`, phone: `1380000000${i}` }));
+    await call('POST', ADD, emp({ name: `员工${i}`, phone: `1380000000${i}` }));
   }
-  const c10 = await call('POST', A, emp({ name: '第十位', phone: '13800000010' }));
+  const c10 = await call('POST', ADD, emp({ name: '第十位', phone: '13800000010' }));
   check('库中最大 EMP0009 时新增 → EMP0010', c10.data?.emp_no === 'EMP0010', c10.data?.emp_no);
 
   /* ---------- R-2 校验与查重 ---------- */
   console.log('\n【R-2 新增 · 前后端双重校验（绕过前端直调接口）】');
-  const dup = await call('POST', A, emp({ name: '李四' }));
+  const dup = await call('POST', ADD, emp({ name: '李四' }));
   check('手机号重复 → 409「该手机号已存在」',
     dup.status === 409 && dup.message === '该手机号已存在', `status=${dup.status} msg=${dup.message}`);
 
-  const badPhone = await call('POST', A, emp({ phone: '12345' }));
+  const badPhone = await call('POST', ADD, emp({ phone: '12345' }));
   check('手机号 12345 → 400「请输入正确的手机号」',
     badPhone.status === 400 && badPhone.message === '请输入正确的手机号', badPhone.message);
 
-  const badDept = await call('POST', A, emp({ phone: '13900000001', department: '神秘部' }));
+  const badDept = await call('POST', ADD, emp({ phone: '13900000001', department: '神秘部' }));
   check('非法部门 → 400', badDept.status === 400, badDept.message);
 
-  const noDept = await call('POST', A, { name: '赵六', phone: '13900000002', position: '测试', hire_date: '2025-01-01' });
+  const noDept = await call('POST', ADD, { name: '赵六', phone: '13900000002', position: '测试', hire_date: '2025-01-01' });
   check('缺必填部门 → 400「请选择部门」',
     noDept.status === 400 && noDept.message === '请选择部门', noDept.message);
 
-  const badEmail = await call('POST', A, emp({ phone: '13900000003', email: 'not-an-email' }));
+  const badEmail = await call('POST', ADD, emp({ phone: '13900000003', email: 'not-an-email' }));
   check('邮箱格式非法 → 400', badEmail.status === 400, badEmail.message);
 
-  const longName = await call('POST', A, emp({ phone: '13900000004', name: '名'.repeat(31) }));
+  const longName = await call('POST', ADD, emp({ phone: '13900000004', name: '名'.repeat(31) }));
   check('姓名超 30 字符 → 400', longName.status === 400, longName.message);
 
-  const longNote = await call('POST', A, emp({ phone: '13900000005', note: '备'.repeat(201) }));
+  const longNote = await call('POST', ADD, emp({ phone: '13900000005', note: '备'.repeat(201) }));
   check('备注超 200 字符 → 400', longNote.status === 400, longNote.message);
 
-  const future = await call('POST', A, emp({ phone: '13900000006', name: '预约入职', hire_date: '2030-01-01' }));
+  const future = await call('POST', ADD, emp({ phone: '13900000006', name: '预约入职', hire_date: '2030-01-01' }));
   check('入职日期为未来 → 允许提交（预约入职）', future.code === 0, future.message);
 
   /* ---------- R-3 编辑 ---------- */
@@ -197,7 +199,7 @@ const emp = (over = {}) => ({
   /* ---------- R-1 检索 / 分页 / 排序 ---------- */
   console.log('\n【R-1 列表 · 检索 · 分页】');
   for (let i = 11; i <= 25; i++) {
-    await call('POST', A, emp({
+    await call('POST', ADD, emp({
       name: i <= 15 ? `张伟${i}` : `员工${i}`,
       phone: `137000000${String(i).padStart(2, '0')}`,
       department: i % 2 === 0 ? '市场部' : '技术部'
@@ -234,7 +236,7 @@ const emp = (over = {}) => ({
 
   /* ---------- R-4 删除 ---------- */
   console.log('\n【R-4 删除】');
-  const delNotFound = await call('DELETE', `${A}/999999`);
+  const delNotFound = await call('DELETE', `${DEL}/999999`);
   check('删除不存在记录 → 404', delNotFound.status === 404, delNotFound.message);
 
   // 删除最大工号后新增，工号必须不复用（序号单调递增，不回退）
@@ -242,24 +244,24 @@ const emp = (over = {}) => ({
   const target = before.data.list[0];              // 当前最大工号（id 倒序首行）
   const expectNext = 'EMP' + String(Number(target.emp_no.slice(3)) + 1).padStart(4, '0');
 
-  const delMax = await call('DELETE', `${A}/${target.id}`);
+  const delMax = await call('DELETE', `${DEL}/${target.id}`);
   check('删除成功返回被删记录信息', delMax.code === 0 && delMax.data.emp_no === target.emp_no);
   const afterDel = await call('GET', `${A}?page=1&pageSize=10`);
   check('删除后 total 减少', afterDel.data.total === before.data.total - 1,
     `total=${afterDel.data.total}`);
 
-  const reuse = await call('POST', A, emp({ name: '新同学', phone: '13600000001' }));
+  const reuse = await call('POST', ADD, emp({ name: '新同学', phone: '13600000001' }));
   check(`已删工号不复用（${target.emp_no} 被删后新增得到 ${expectNext}）`,
     reuse.data.emp_no === expectNext, reuse.data.emp_no);
 
-  const delOffDuty = await call('DELETE', `${A}/${c1.data.id}`);
+  const delOffDuty = await call('DELETE', `${DEL}/${c1.data.id}`);
   check('离职员工同样可删除', delOffDuty.code === 0 && delOffDuty.data.emp_no === 'EMP0001');
 
   /* ---------- 并发工号 ---------- */
   console.log('\n【并发 · 工号事务】');
   const results = await Promise.all(
     Array.from({ length: 12 }, (_, i) =>
-      call('POST', A, emp({ name: `并发${i}`, phone: `135000000${String(i).padStart(2, '0')}`, department: '财务部' }))
+      call('POST', ADD, emp({ name: `并发${i}`, phone: `135000000${String(i).padStart(2, '0')}`, department: '财务部' }))
     )
   );
   const nos = results.map((r) => r.data?.emp_no);

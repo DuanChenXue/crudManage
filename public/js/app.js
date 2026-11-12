@@ -33,35 +33,6 @@ $(function () {
     return $('<div>').text(v === null || v === undefined ? '' : String(v)).html();
   }
 
-  /** 统一请求：后端 code!==0 时 reject，message 直接可用于提示 */
-  function api(path, options) {
-    options = options || {};
-    return $.ajax({
-      url: path,
-      method: options.method || 'GET',
-      contentType: 'application/json; charset=utf-8',
-      data: options.body ? JSON.stringify(options.body) : undefined,
-      dataType: 'json'
-    }).then(
-      function (payload) {
-        if (!payload || payload.code !== 0) {
-          const err = new Error((payload && payload.message) || '请求失败');
-          err.code = payload && payload.code;
-          return $.Deferred().reject(err).promise();
-        }
-        return payload.data;
-      },
-      function (xhr) {
-        // 后端即便返回 4xx/5xx 也带统一响应体，优先取其中的 message
-        let payload = null;
-        try { payload = xhr.responseJSON || JSON.parse(xhr.responseText); } catch (e) { /* 非 JSON */ }
-        const err = new Error((payload && payload.message) || '服务无响应，请确认后台已启动');
-        err.code = payload && payload.code;
-        return $.Deferred().reject(err).promise();
-      }
-    );
-  }
-
   /** D-3 全局提示条：右上角，3 秒自动消失 */
   function toast(message, type) {
     const $el = $('<div>')
@@ -86,32 +57,39 @@ $(function () {
 
   /* ---------------------------------------------------- R-1 列表与检索 */
 
-  function buildQuery() {
-    const q = $.param({
-      page: state.page,
-      pageSize: PAGE_SIZE,
-      keyword: state.keyword,
-      department: state.department,
-      status: state.status
-    });
-    return q;
-  }
-
   let reqSeq = 0;
 
+  // 获取员工列表
   function loadList() {
     const seq = ++reqSeq;
     $q('loading').prop('hidden', false);
-    return api('/api/employees?' + buildQuery()).then(
-      function (data) {
+    return $.ajax({
+      url: '/api/employees',
+      method: 'GET',
+      dataType: 'json',
+      data: {
+        page: state.page,
+        pageSize: PAGE_SIZE,
+        keyword: state.keyword,
+        department: state.department,
+        status: state.status
+      }
+    }).then(
+      function (res) {
         if (seq !== reqSeq) return;           // 丢弃过期响应，防快速筛选串页
-        renderTable(data.list);
-        renderPager(data);
+        if (!res || res.code !== 0) {
+          renderTable([]);
+          toast((res && res.message) || '请求失败', 'error');
+          return;
+        }
+        renderTable(res.data.list);
+        renderPager(res.data);
       },
-      function (err) {
+      function (xhr) {
         if (seq !== reqSeq) return;
+        const res = xhr.responseJSON || {};
         renderTable([]);
-        toast(err.message, 'error');
+        toast(res.message || '服务无响应，请确认后台已启动', 'error');
       }
     ).always(function () {
       if (seq === reqSeq) $q('loading').prop('hidden', true);
@@ -197,6 +175,9 @@ $(function () {
 
   /* ---------------------------------------------------- D-1 表单浮层（新增/编辑复用） */
 
+  // 打开浮层时指定提交动作，提交时不再判断新增/编辑
+  let submitAction = addEmployee;
+
   function openForm(mode, row) {
     clearErrors();
     $q('empForm')[0].reset();
@@ -205,6 +186,7 @@ $(function () {
     $q('fmEmpNo').text(mode === 'edit' ? row.emp_no : '保存后自动生成');
 
     if (mode === 'edit') {
+      submitAction = updateEmployee;
       $q('fmId').val(row.id);
       $q('fmName').val(row.name);
       $q('fmGender').val(row.gender);
@@ -216,6 +198,7 @@ $(function () {
       $q('fmStatus').val(String(row.status));
       $q('fmNote').val(row.note || '');
     } else {
+      submitAction = addEmployee;
       $q('fmHireDate').val(new Date().toISOString().slice(0, 10));
     }
 
@@ -225,21 +208,6 @@ $(function () {
 
   function closeForm() {
     $q('formMask').prop('hidden', true);
-  }
-
-  /** 收集表单值（emp_no / id / created_at / updated_at 均由后端管理，不提交） */
-  function collect() {
-    return {
-      name: $.trim($q('fmName').val()),
-      gender: $q('fmGender').val(),
-      phone: $.trim($q('fmPhone').val()),
-      email: $.trim($q('fmEmail').val()),
-      department: $q('fmDepartment').val(),
-      position: $.trim($q('fmPosition').val()),
-      hire_date: $q('fmHireDate').val(),
-      status: Number($q('fmStatus').val()),
-      note: $.trim($q('fmNote').val())
-    };
   }
 
   /** 前端校验：非法输入就地提示并拦下，不发起请求 */
@@ -266,37 +234,81 @@ $(function () {
     return fields.length === 0;
   }
 
-  function submitForm() {
-    const data = collect();
+  /** 新增员工：POST /api/addEmployee */
+  function addEmployee() {
+    const data = {
+      name: $.trim($q('fmName').val()),
+      gender: $q('fmGender').val(),
+      phone: $.trim($q('fmPhone').val()),
+      email: $.trim($q('fmEmail').val()),
+      department: $q('fmDepartment').val(),
+      position: $.trim($q('fmPosition').val()),
+      hire_date: $q('fmHireDate').val(),
+      status: Number($q('fmStatus').val()),
+      note: $.trim($q('fmNote').val())
+    };
     if (!validate(data)) return;
 
-    const id = $q('fmId').val();
-    const isEdit = !!id;
     const $btn = $q('formSubmit').prop('disabled', true).text('保存中…');
+    $.ajax({
+      url: '/api/addEmployee',
+      method: 'POST',
+      contentType: 'application/json; charset=utf-8',
+      data: JSON.stringify(data),
+      dataType: 'json'
+    }).done(function (res) {
+      if (res.code !== 0) { toast(res.message, 'error'); return; }
+      closeForm();
+      state.page = 1;   // 新增后回到第 1 页
+      loadList().then(function () { toast('新增成功'); });
+    }).fail(function (xhr) {
+      const res = xhr.responseJSON || {};
+      const message = res.message || '服务无响应，请确认后台已启动';
+      // 手机号重复：就地提示，浮层保持打开且已填内容不丢失
+      if (res.code === 409) setError('phone', message);
+      // 记录已被他人删除：关闭浮层并刷新列表
+      if (res.code === 404) { closeForm(); loadList(); }
+      $q('formAlert').text(message).prop('hidden', false);
+      toast(message, 'error');
+    }).always(function () {
+      $btn.prop('disabled', false).text('保存');
+    });
+  }
 
-    api(isEdit ? '/api/employees/' + id : '/api/employees', {
-      method: isEdit ? 'PUT' : 'POST',
-      body: data
-    }).then(
-      function () {
-        closeForm();
-        if (!isEdit) state.page = 1;   // 新增后回到第 1 页；编辑则原地刷新
-        return loadList().then(function () {
-          toast(isEdit ? '保存成功' : '新增成功');
-        });
-      },
-      function (err) {
-        // 手机号重复：就地提示，浮层保持打开且已填内容不丢失
-        if (err.code === 409) setError('phone', err.message);
-        // 记录已被他人删除：关闭浮层并刷新列表
-        if (err.code === 404) {
-          closeForm();
-          loadList();
-        }
-        $q('formAlert').text(err.message).prop('hidden', false);
-        toast(err.message, 'error');
-      }
-    ).always(function () {
+  /** 编辑员工：PUT /api/employees/:id，原地刷新列表 */
+  function updateEmployee() {
+    const data = {
+      name: $.trim($q('fmName').val()),
+      gender: $q('fmGender').val(),
+      phone: $.trim($q('fmPhone').val()),
+      email: $.trim($q('fmEmail').val()),
+      department: $q('fmDepartment').val(),
+      position: $.trim($q('fmPosition').val()),
+      hire_date: $q('fmHireDate').val(),
+      status: Number($q('fmStatus').val()),
+      note: $.trim($q('fmNote').val())
+    };
+    if (!validate(data)) return;
+
+    const $btn = $q('formSubmit').prop('disabled', true).text('保存中…');
+    $.ajax({
+      url: '/api/employees/' + $q('fmId').val(),
+      method: 'PUT',
+      contentType: 'application/json; charset=utf-8',
+      data: JSON.stringify(data),
+      dataType: 'json'
+    }).done(function (res) {
+      if (res.code !== 0) { toast(res.message, 'error'); return; }
+      closeForm();
+      loadList().then(function () { toast('保存成功'); });
+    }).fail(function (xhr) {
+      const res = xhr.responseJSON || {};
+      const message = res.message || '服务无响应，请确认后台已启动';
+      if (res.code === 409) setError('phone', message);
+      if (res.code === 404) { closeForm(); loadList(); }
+      $q('formAlert').text(message).prop('hidden', false);
+      toast(message, 'error');
+    }).always(function () {
       $btn.prop('disabled', false).text('保存');
     });
   }
@@ -321,21 +333,24 @@ $(function () {
     if (!delId) return;
     const $btn = $q('delConfirm').prop('disabled', true);
 
-    api('/api/employees/' + delId, { method: 'DELETE' }).then(
-      function () {
-        closeDelete();
-        // 分页自愈：末页被删空且不是第 1 页时回到上一页
-        const total = Number($q('totalCount').text()) - 1;
-        const lastPage = Math.max(Math.ceil(total / PAGE_SIZE), 1);
-        if (state.page > lastPage) state.page = lastPage;
-        return loadList().then(function () { toast('删除成功'); });
-      },
-      function (err) {
-        // 删除失败：保留该行，界面与数据库保持一致
-        toast(err.message, 'error');
-        loadList();
-      }
-    ).always(function () {
+    $.ajax({
+      url: '/api/delete/' + delId,
+      method: 'DELETE',
+      dataType: 'json'
+    }).done(function (res) {
+      if (res.code !== 0) { toast(res.message, 'error'); loadList(); return; }
+      closeDelete();
+      // 分页自愈：末页被删空且不是第 1 页时回到上一页
+      const total = Number($q('totalCount').text()) - 1;
+      const lastPage = Math.max(Math.ceil(total / PAGE_SIZE), 1);
+      if (state.page > lastPage) state.page = lastPage;
+      loadList().then(function () { toast('删除成功'); });
+    }).fail(function (xhr) {
+      // 删除失败：保留该行，界面与数据库保持一致
+      const res = xhr.responseJSON || {};
+      toast(res.message || '服务无响应，请确认后台已启动', 'error');
+      loadList();
+    }).always(function () {
       $btn.prop('disabled', false);
     });
   }
@@ -388,23 +403,28 @@ $(function () {
         openDelete(id, $btn.attr('data-label'));
         return;
       }
-      api('/api/employees/' + id).then(
-        function (row) { openForm('edit', row); },
-        function (err) {
-          toast(err.message, 'error');
-          loadList();   // 记录已被删除等场景：刷新列表兜底
-        }
-      );
+      $.ajax({
+        url: '/api/employees/' + id,
+        method: 'GET',
+        dataType: 'json'
+      }).done(function (res) {
+        if (res.code !== 0) { toast(res.message, 'error'); loadList(); return; }
+        openForm('edit', res.data);
+      }).fail(function (xhr) {
+        const res = xhr.responseJSON || {};
+        toast(res.message || '服务无响应，请确认后台已启动', 'error');
+        loadList();   // 记录已被删除等场景：刷新列表兜底
+      });
     });
 
     // 新增
     $q('btnAdd').on('click', function () { openForm('add'); });
 
     // 表单浮层
-    $q('formSubmit').on('click', submitForm);
+    $q('formSubmit').on('click', function () { submitAction(); });
     $q('formCancel').on('click', closeForm);
     $q('formClose').on('click', closeForm);
-    $q('empForm').on('submit', function (e) { e.preventDefault(); submitForm(); });
+    $q('empForm').on('submit', function (e) { e.preventDefault(); submitAction(); });
     $q('formMask').on('click', function (e) { if (e.target === this) closeForm(); });
 
     // 删除浮层

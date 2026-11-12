@@ -4,9 +4,9 @@
  * 员工接口（PRD 8.2）
  *   GET    /api/employees        列表 + 检索 + 分页
  *   GET    /api/employees/:id    单条详情
- *   POST   /api/employees        新增（工号由 db 层在事务内生成）
+ *   POST   /api/addEmployee      新增（工号由 db 层在事务内生成）
  *   PUT    /api/employees/:id    编辑（离职记录 400 拒绝）
- *   DELETE /api/employees/:id    删除
+ *   DELETE /api/delete/:id       删除
  */
 const { db, now, insertEmployee } = require('../db');
 
@@ -216,6 +216,26 @@ function remove(id) {
  * @returns {Promise<boolean>} 是否命中并已处理该请求
  */
 async function handle(req, res, url, { readBody, send }) {
+  if (url.pathname === '/api/addEmployee') {
+    if (req.method === 'POST') {
+      const body = await readBody(req);
+      send(res, 200, create(body), '新增成功');
+      return true;
+    }
+    send(res, 405, null, '不支持的请求方法');
+    return true;
+  }
+
+  const del = url.pathname.match(/^\/api\/delete\/(\d+)$/);
+  if (del) {
+    if (req.method === 'DELETE') {
+      send(res, 200, remove(Number(del[1])), '删除成功');
+      return true;
+    }
+    send(res, 405, null, '不支持的请求方法');
+    return true;
+  }
+
   const m = url.pathname.match(/^\/api\/employees(?:\/(\d+))?$/);
   if (!m) return false;
 
@@ -224,12 +244,6 @@ async function handle(req, res, url, { readBody, send }) {
   if (!id) {
     if (req.method === 'GET') {
       send(res, 200, list(Object.fromEntries(url.searchParams)));
-      return true;
-    }
-    if (req.method === 'POST') {
-      const body = await readBody(req);
-      const data = create(body);
-      send(res, 200, data, '新增成功');
       return true;
     }
     send(res, 405, null, '不支持的请求方法');
@@ -249,11 +263,6 @@ async function handle(req, res, url, { readBody, send }) {
     const body = await readBody(req);
     const data = update(id, body);
     send(res, 200, data, '保存成功');
-    return true;
-  }
-  if (req.method === 'DELETE') {
-    const data = remove(id);
-    send(res, 200, data, '删除成功');
     return true;
   }
   send(res, 405, null, '不支持的请求方法');

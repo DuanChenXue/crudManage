@@ -86,11 +86,11 @@ const requiredFields = ['name', 'gender', 'phone', 'email', 'department', 'posit
 requiredFields.forEach((f) => {
   check(`表单字段映射含 ${f}`, new RegExp(`${f}:\\s*'fm`).test(appJs));
 });
-// 提交载荷来自 collect()，断言其函数体内不含 emp_no（三元表达式 row.emp_no : xxx 的冒号不算对象键）
-const collectBody = (appJs.match(/function collect\(\)\s*\{([\s\S]*?)\n  \}/) || [])[1] || '';
+// 新增/编辑各自内联提交载荷，断言两处都不含 emp_no（工号由后端生成）
+const payloadBodies = [...appJs.matchAll(/const data = \{([\s\S]*?)\n    \};/g)].map((m) => m[1]);
 check('提交时不传 emp_no（由后端生成）',
-  collectBody.length > 0 && !/emp_no/.test(collectBody),
-  'collect() 应只返回前端可编辑字段');
+  payloadBodies.length === 2 && payloadBodies.every((body) => !/emp_no/.test(body)),
+  '新增/编辑的提交载荷应只含前端可编辑字段');
 
 /* ---------- 汇总 ---------- */
 console.log(`\n========== 结果：通过 ${pass} / 失败 ${fail} ==========`);
